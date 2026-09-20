@@ -1,10 +1,10 @@
 import os
 import requests
 import telebot
+import yt_dlp
 from flask import Flask, request
 
 BOT_TOKEN = "8892850570:AAH2A6rEyndq-Uc05x5pYa5zGLpip2UX9lI"
-# Thay URL này bằng link Web Service thực tế của bạn trên Render
 RENDER_URL = "https://fast-tiktok-dl-bot.onrender.com"
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -15,26 +15,34 @@ HEADERS = {
 }
 
 def get_tiktok_video(url: str):
+    # Giải nén link rút gọn nếu có
     try:
         req = requests.get(url, headers=HEADERS, allow_redirects=True, timeout=8)
         url = req.url
     except Exception as e:
         print(f"Lỗi URL: {e}")
 
-    api_url = "https://www.tikwm.com/api/"
-    payload = {"url": url, "hd": 1}
+    # Sử dụng yt-dlp để lấy trực tiếp link video
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
     try:
-        response = requests.post(api_url, data=payload, headers=HEADERS, timeout=12).json()
-        if response.get("code") == 0:
-            data = response["data"]
-            return {
-                "success": True,
-                "video_url": data.get("play"),
-                "title": data.get("title", "TikTok Video"),
-                "author": data.get("author", {}).get("nickname", "Unknown"),
-            }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            video_url = info.get("url")
+            if video_url:
+                return {
+                    "success": True,
+                    "video_url": video_url,
+                    "title": info.get("title", "TikTok Video"),
+                    "author": info.get("uploader", "Unknown"),
+                }
     except Exception as e:
-        print(f"Lỗi API: {e}")
+        print(f"Lỗi yt-dlp: {e}")
+        
     return {"success": False}
 
 @app.route('/' + BOT_TOKEN, methods=['POST'])
