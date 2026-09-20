@@ -25,10 +25,20 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 
 def get_tiktok_video(url: str):
+    # Tự động lấy URL gốc nếu người dùng gửi link rút gọn vt.tiktok.com
+    try:
+        req = requests.get(url, allow_redirects=True, timeout=10)
+        url = req.url
+    except Exception as e:
+        print(f"Lỗi giải nén URL: {e}")
+
     api_url = "https://www.tikwm.com/api/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     payload = {"url": url, "hd": 1}
     try:
-        response = requests.post(api_url, data=payload, timeout=10).json()
+        response = requests.post(api_url, data=payload, headers=headers, timeout=15).json()
         if response.get("code") == 0:
             data = response["data"]
             return {
@@ -76,30 +86,3 @@ def handle_message(message):
 
 print("Bot đang chạy...")
 bot.infinity_polling()
-
-def get_tiktok_video(url: str):
-    # Tự động lấy URL gốc nếu người dùng gửi link rút gọn vt.tiktok.com
-    try:
-        req = requests.get(url, allow_redirects=True, timeout=10)
-        url = req.url
-    except Exception as e:
-        print(f"Lỗi giải nén URL: {e}")
-
-    api_url = "https://www.tikwm.com/api/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    payload = {"url": url, "hd": 1}
-    try:
-        response = requests.post(api_url, data=payload, headers=headers, timeout=15).json()
-        if response.get("code") == 0:
-            data = response["data"]
-            return {
-                "success": True,
-                "video_url": data["play"],
-                "title": data.get("title", "TikTok Video"),
-                "author": data.get("author", {}).get("nickname", "Unknown"),
-            }
-    except Exception as e:
-        print(f"Lỗi API: {e}")
-    return {"success": False}
