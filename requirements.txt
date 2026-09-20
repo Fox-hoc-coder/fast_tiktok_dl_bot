@@ -1,4 +1,4 @@
 pyTelegramBotAPI
 requests
-yt-dlp
+yt-dlp>=2024.08.06
 Flask
