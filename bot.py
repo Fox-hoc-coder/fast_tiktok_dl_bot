@@ -1,3 +1,4 @@
+import io
 import os
 import requests
 import telebot
@@ -14,15 +15,14 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-def get_tiktok_video(url: str):
-    # Giải nén link rút gọn nếu có
+def download_tiktok(url: str):
+    # Tự động giải nén URL nếu là link vt.tiktok.com
     try:
         req = requests.get(url, headers=HEADERS, allow_redirects=True, timeout=8)
         url = req.url
     except Exception as e:
-        print(f"Lỗi URL: {e}")
+        print(f"Lỗi giải nén URL: {e}")
 
-    # Sử dụng yt-dlp để lấy trực tiếp link video
     ydl_opts = {
         'format': 'best',
         'quiet': True,
@@ -33,13 +33,21 @@ def get_tiktok_video(url: str):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             video_url = info.get("url")
+            title = info.get("title", "TikTok Video")
+            author = info.get("uploader", "Unknown")
+
             if video_url:
-                return {
-                    "success": True,
-                    "video_url": video_url,
-                    "title": info.get("title", "TikTok Video"),
-                    "author": info.get("uploader", "Unknown"),
-                }
+                # Tải nội dung video về RAM dưới dạng bytes
+                res = requests.get(video_url, headers=HEADERS, timeout=20)
+                if res.status_code == 200:
+                    video_bytes = io.BytesIO(res.content)
+                    video_bytes.name = "video.mp4"
+                    return {
+                        "success": True,
+                        "video_data": video_bytes,
+                        "title": title,
+                        "author": author
+                    }
     except Exception as e:
         print(f"Lỗi yt-dlp: {e}")
         
@@ -69,14 +77,15 @@ def handle_message(message):
         bot.reply_to(message, "❌ Vui lòng gửi một link TikTok hợp lệ!")
         return
 
-    msg = bot.reply_to(message, "⏳ Đang xử lý...")
-    res = get_tiktok_video(text)
-    if res["success"] and res.get("video_url"):
+    msg = bot.reply_to(message, "⏳ Đang xử lý và tải video...")
+    res = download_tiktok(text)
+    
+    if res["success"]:
         caption = f"🎬 {res['title']}\n👤 Kênh: {res['author']}"
-        bot.send_video(message.chat.id, res["video_url"], caption=caption)
+        bot.send_video(message.chat.id, res["video_data"], caption=caption)
         bot.delete_message(message.chat.id, msg.message_id)
     else:
-        bot.edit_message_text("❌ Không thể tải video này!", message.chat.id, msg.message_id)
+        bot.edit_message_text("❌ Không thể tải video này! Có thể link bị lỗi hoặc video riêng tư.", message.chat.id, msg.message_id)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
