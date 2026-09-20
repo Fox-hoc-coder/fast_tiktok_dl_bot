@@ -1,7 +1,25 @@
 import logging
+import os
 import requests
 import telebot
+from flask import Flask
+from threading import Thread
 
+# === 1. TẠO WEB SERVER GIẢ LẬP ĐỂ PASS PORT SCAN CỦA RENDER ===
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot TikTok đang hoạt động!"
+
+def run():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+# Chạy Flask Server trong 1 luồng riêng (Thread)
+Thread(target=run).start()
+
+# === 2. CODE BOT TELEGRAM TIKTOK CỦA BẠN ===
 BOT_TOKEN = "8892850570:AAH2A6rEyndq-Uc05x5pYa5zGLpip2UX9lI"
 bot = telebot.TeleBot(BOT_TOKEN)
 
