@@ -5,7 +5,7 @@ import telebot
 from flask import Flask
 from threading import Thread
 
-# === 1. TẠO WEB SERVER GIẢ LẬP ĐỂ PASS PORT SCAN CỦA RENDER ===
+# === 1. WEB SERVER DÙNG ĐỂ PASS PORT CHECK TRÊN RENDER ===
 app = Flask('')
 
 @app.route('/')
@@ -16,39 +16,38 @@ def run():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# Chạy Flask Server trong 1 luồng riêng (Thread)
 Thread(target=run).start()
 
-# === 2. CODE BOT TELEGRAM TIKTOK CỦA BẠN ===
+# === 2. THIẾT LẬP TELEGRAM BOT ===
 BOT_TOKEN = "8892850570:AAH2A6rEyndq-Uc05x5pYa5zGLpip2UX9lI"
 bot = telebot.TeleBot(BOT_TOKEN)
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
 
 def get_tiktok_video(url: str):
-    # Tự động lấy URL gốc nếu người dùng gửi link rút gọn vt.tiktok.com
+    # Giải nén URL nếu là link rút gọn vt.tiktok.com
     try:
-        req = requests.get(url, allow_redirects=True, timeout=10)
+        req = requests.get(url, headers=HEADERS, allow_redirects=True, timeout=8)
         url = req.url
     except Exception as e:
         print(f"Lỗi giải nén URL: {e}")
 
     api_url = "https://www.tikwm.com/api/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
     payload = {"url": url, "hd": 1}
     try:
-        response = requests.post(api_url, data=payload, headers=headers, timeout=15).json()
+        response = requests.post(api_url, data=payload, headers=HEADERS, timeout=12).json()
         if response.get("code") == 0:
             data = response["data"]
             return {
                 "success": True,
-                "video_url": data["play"],
+                "video_url": data.get("play"),
                 "title": data.get("title", "TikTok Video"),
                 "author": data.get("author", {}).get("nickname", "Unknown"),
             }
     except Exception as e:
-        print(f"Lỗi API: {e}")
+        print(f"Lỗi API TikWM: {e}")
     return {"success": False}
 
 
@@ -70,19 +69,27 @@ def handle_message(message):
     msg = bot.reply_to(
         message, "⏳ Đang xử lý và tải video, vui lòng chờ trong giây lát..."
     )
-    res = get_tiktok_video(text)
-
-    if res["success"]:
-        caption = f"🎬 {res['title']}\n👤 Kênh: {res['author']}"
-        bot.send_video(message.chat.id, res["video_url"], caption=caption)
-        bot.delete_message(message.chat.id, msg.message_id)
-    else:
+    
+    try:
+        res = get_tiktok_video(text)
+        if res["success"] and res.get("video_url"):
+            caption = f"🎬 {res['title']}\n👤 Kênh: {res['author']}"
+            bot.send_video(message.chat.id, res["video_url"], caption=caption)
+            bot.delete_message(message.chat.id, msg.message_id)
+        else:
+            bot.edit_message_text(
+                "❌ Không thể tải video này! Có thể link bị lỗi hoặc video ở chế độ riêng tư.",
+                message.chat.id,
+                msg.message_id,
+            )
+    except Exception as e:
+        print(f"Lỗi hệ thống: {e}")
         bot.edit_message_text(
-            "❌ Không thể tải video này! Có thể link bị lỗi hoặc video ở chế độ riêng tư.",
+            "❌ Đã xảy ra lỗi khi xử lý video. Vui lòng thử lại sau!",
             message.chat.id,
             msg.message_id,
         )
 
 
 print("Bot đang chạy...")
-bot.infinity_polling()
+bot.infinity_polling(timeout=10, long_polling_timeout=5)
